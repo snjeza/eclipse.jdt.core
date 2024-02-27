@@ -222,6 +222,19 @@ public class ASTModelBridgeTests extends AbstractASTTests {
 		deleteProject("P");
 	}
 
+	@Override
+	public void setUp() throws Exception {
+		super.setUp();
+		setUpWorkingCopy();
+	}
+
+	@Override
+	public void tearDown() throws Exception {
+		super.tearDown();
+		if (this.workingCopy != null)
+			this.workingCopy.discardWorkingCopy();
+	}
+
 	/*
 	 * Ensures that the IJavaElement of an IBinding representing an annotation is correct.
 	 */

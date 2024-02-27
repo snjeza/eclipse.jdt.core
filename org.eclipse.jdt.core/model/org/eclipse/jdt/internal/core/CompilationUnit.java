@@ -165,7 +165,7 @@ protected boolean buildStructure(OpenableElementInfo info, final IProgressMonito
 		astParser.setWorkingCopyOwner(getOwner());
 		astParser.setSource(this instanceof ClassFileWorkingCopy ? source : this);
 		astParser.setProject(getJavaProject());
-		astParser.setStatementsRecovery((reconcileFlags & ICompilationUnit.ENABLE_STATEMENTS_RECOVERY) != 0);
+		astParser.setStatementsRecovery(true);
 		astParser.setResolveBindings(computeProblems || resolveBindings);
 		astParser.setBindingsRecovery((reconcileFlags & ICompilationUnit.ENABLE_BINDINGS_RECOVERY) != 0);
 		astParser.setIgnoreMethodBodies((reconcileFlags & ICompilationUnit.IGNORE_METHOD_BODIES) != 0);
@@ -1660,7 +1660,7 @@ public Map<String, String> getCustomOptions() {
 			AST.newAST(parentOptions).apiLevel() != AST.getJLSLatest()) {
 			// Disable preview features for older Java releases as it causes the compiler to fail later
 			if (customOptions != null) {
-				customOptions.put(JavaCore.COMPILER_PB_ENABLE_PREVIEW_FEATURES, JavaCore.DISABLED);	
+				customOptions.put(JavaCore.COMPILER_PB_ENABLE_PREVIEW_FEATURES, JavaCore.DISABLED);
 			} else {
 				customOptions = Map.of(JavaCore.COMPILER_PB_ENABLE_PREVIEW_FEATURES, JavaCore.DISABLED);
 			}
