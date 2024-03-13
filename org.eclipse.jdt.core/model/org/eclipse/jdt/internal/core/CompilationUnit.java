@@ -783,7 +783,18 @@ private static boolean matchSignatures(IMethodBinding invocation, IMethodBinding
 
 
 private org.eclipse.jdt.core.dom.CompilationUnit getOrBuildAST(WorkingCopyOwner workingCopyOwner) {
-	if (this.ast == null) {
+	// https://github.com/eclipse-jdtls/eclipse-jdt-core-incubator/pull/133
+	// we should find some better condition than this as we would like to avoid calling twice this method
+	// on the same unsaved working copy does re-create an AST every time
+	boolean createAst = this.ast == null;
+	if (!createAst) {
+		try {
+			createAst = this.isWorkingCopy() && this.hasUnsavedChanges();
+		} catch (JavaModelException e) {
+			createAst = true;
+		}
+	}
+	if (createAst) {
 		ASTParser parser = ASTParser.newParser(AST.getJLSLatest()); // TODO use Java project info
 		parser.setWorkingCopyOwner(workingCopyOwner);
 		parser.setSource(this);
