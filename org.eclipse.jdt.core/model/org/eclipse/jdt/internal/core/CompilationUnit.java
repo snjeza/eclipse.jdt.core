@@ -44,6 +44,9 @@ import org.eclipse.jdt.core.dom.MethodReference;
 import org.eclipse.jdt.core.dom.Name;
 import org.eclipse.jdt.core.dom.NodeFinder;
 import org.eclipse.jdt.core.dom.ParameterizedType;
+import org.eclipse.jdt.core.dom.QualifiedName;
+import org.eclipse.jdt.core.dom.QualifiedType;
+import org.eclipse.jdt.core.dom.SimpleName;
 import org.eclipse.jdt.core.dom.SimpleType;
 import org.eclipse.jdt.core.dom.SingleVariableDeclaration;
 import org.eclipse.jdt.core.dom.SuperConstructorInvocation;
@@ -540,7 +543,7 @@ public IJavaElement[] codeSelect(int offset, int length, WorkingCopyOwner workin
 			} while (changed);
 		}
 		NodeFinder finder = new NodeFinder(currentAST, offset, length);
-		ASTNode node = finder.getCoveredNode() != null && finder.getCoveredNode().getStartPosition() > offset && finder.getCoveringNode().getStartPosition() + finder.getCoveringNode().getLength() > offset + length ?
+		final ASTNode node = finder.getCoveredNode() != null && finder.getCoveredNode().getStartPosition() > offset && finder.getCoveringNode().getStartPosition() + finder.getCoveringNode().getLength() > offset + length ?
 			finder.getCoveredNode() :
 			finder.getCoveringNode();
 		org.eclipse.jdt.core.dom.ImportDeclaration importDecl = findImportDeclaration(node);
@@ -637,13 +640,54 @@ public IJavaElement[] codeSelect(int offset, int length, WorkingCopyOwner workin
 				}
 			}
 		} while (newChildFound);
-		return currentElement instanceof JavaElement impl &&
+		if (currentElement instanceof JavaElement impl &&
 				impl.getElementInfo() instanceof AnnotatableInfo annotable &&
 				annotable.getNameSourceStart() >= 0 &&
 				annotable.getNameSourceStart() <= offset &&
-				annotable.getNameSourceEnd() >= offset ?
-			new IJavaElement[] { currentElement } :
-			new IJavaElement[0];
+				annotable.getNameSourceEnd() >= offset) {
+			return new IJavaElement[] { currentElement };
+		}
+		// failback to lookup search
+		ASTNode currentNode = node;
+		while (currentNode != null && !(currentNode instanceof Type)) {
+			currentNode = currentNode.getParent();
+		}
+		if (currentNode instanceof Type parentType) {
+			List<IType> indexMatch = new ArrayList<>();
+			TypeNameMatchRequestor requestor = new TypeNameMatchRequestor() {
+				@Override
+				public void acceptTypeNameMatch(org.eclipse.jdt.core.search.TypeNameMatch match) {
+					indexMatch.add(match.getType());
+				}
+			};
+			IJavaSearchScope scope = BasicSearchEngine.createWorkspaceScope();
+			char[] packageName = parentType instanceof QualifiedType qType ? qType.getQualifier().toString().toCharArray() :
+				parentType instanceof SimpleType sType ?
+					sType.getName() instanceof QualifiedName qName ? qName.getQualifier().toString().toCharArray() :
+					null :
+				null;
+			char[] simpleName = parentType instanceof QualifiedType qType ? qType.getName().toString().toCharArray() :
+				parentType instanceof SimpleType sType ?
+					sType.getName() instanceof SimpleName sName ? sName.getIdentifier().toCharArray() :
+					sType.getName() instanceof QualifiedName qName ? qName.getName().toString().toCharArray() :
+					null :
+				null;
+			new BasicSearchEngine(getOwner()).searchAllTypeNames(
+				packageName,
+				SearchPattern.R_EXACT_MATCH,
+				simpleName,
+				SearchPattern.R_EXACT_MATCH | SearchPattern.R_CASE_SENSITIVE,
+				IJavaSearchConstants.TYPE,
+				scope,
+				new TypeNameMatchRequestorWrapper(requestor, scope),
+				IJavaSearchConstants.WAIT_UNTIL_READY_TO_SEARCH,
+				new NullProgressMonitor());
+			if (!indexMatch.isEmpty()) {
+				return indexMatch.toArray(IJavaElement[]::new);
+			}
+		}
+		// no good idea left
+		return new IJavaElement[0];
 	} else {
 		return super.codeSelect(this, offset, length, workingCopyOwner);
 	}
