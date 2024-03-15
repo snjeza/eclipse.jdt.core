@@ -540,7 +540,7 @@ public IJavaElement[] codeSelect(int offset, int length, WorkingCopyOwner workin
 			} while (changed);
 		}
 		NodeFinder finder = new NodeFinder(currentAST, offset, length);
-		ASTNode node = finder.getCoveredNode() != null && finder.getCoveringNode().getStartPosition() + finder.getCoveringNode().getLength() > offset + length ?
+		ASTNode node = finder.getCoveredNode() != null && finder.getCoveredNode().getStartPosition() > offset && finder.getCoveringNode().getStartPosition() + finder.getCoveringNode().getLength() > offset + length ?
 			finder.getCoveredNode() :
 			finder.getCoveringNode();
 		org.eclipse.jdt.core.dom.ImportDeclaration importDecl = findImportDeclaration(node);
