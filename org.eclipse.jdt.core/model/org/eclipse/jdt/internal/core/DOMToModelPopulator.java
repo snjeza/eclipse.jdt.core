@@ -282,7 +282,7 @@ class DOMToModelPopulator extends ASTVisitor {
 		addAsChild(this.infos.peek(), newElement);
 		SourceTypeElementInfo newInfo = new SourceTypeElementInfo();
 		boolean isDeprecated = isNodeDeprecated(node);
-		char[][] categories = getCategories(node.getJavadoc());
+		char[][] categories = getCategories(node);
 		newInfo.addCategories(newElement, categories);
 		JavaElementInfo toPopulateCategories = this.infos.peek();
 		while (toPopulateCategories != null) {
@@ -332,7 +332,7 @@ class DOMToModelPopulator extends ASTVisitor {
 		addAsChild(this.infos.peek(), newElement);
 		SourceTypeElementInfo newInfo = new SourceTypeElementInfo();
 		setSourceRange(newInfo, node);
-		char[][] categories = getCategories(node.getJavadoc());
+		char[][] categories = getCategories(node);
 		newInfo.addCategories(newElement, categories);
 		JavaElementInfo toPopulateCategories = this.infos.peek();
 		while (toPopulateCategories != null) {
@@ -366,7 +366,7 @@ class DOMToModelPopulator extends ASTVisitor {
 		addAsChild(this.infos.peek(), newElement);
 		SourceTypeElementInfo newInfo = new SourceTypeElementInfo();
 		setSourceRange(newInfo, node);
-		char[][] categories = getCategories(node.getJavadoc());
+		char[][] categories = getCategories(node);
 		newInfo.addCategories(newElement, categories);
 		JavaElementInfo toPopulateCategories = this.infos.peek();
 		while (toPopulateCategories != null) {
@@ -424,7 +424,7 @@ class DOMToModelPopulator extends ASTVisitor {
 		addAsChild(this.infos.peek(), newElement);
 		SourceTypeElementInfo newInfo = new SourceTypeElementInfo();
 		setSourceRange(newInfo, node);
-		char[][] categories = getCategories(node.getJavadoc());
+		char[][] categories = getCategories(node);
 		newInfo.addCategories(newElement, categories);
 		newInfo.setSuperclassName(Record.class.getName().toCharArray());
 		newInfo.setSuperInterfaceNames(((List<Type>)node.superInterfaceTypes()).stream().map(Type::toString).map(String::toCharArray).toArray(char[][]::new));
@@ -513,7 +513,7 @@ class DOMToModelPopulator extends ASTVisitor {
 			}
 		}
 		if (this.infos.peek() instanceof SourceTypeElementInfo parentInfo) {
-			parentInfo.addCategories(newElement, getCategories(method.getJavadoc()));
+			parentInfo.addCategories(newElement, getCategories(method));
 		}
 		if (method.getAST().apiLevel() >= AST.JLS8) {
 			info.setExceptionTypeNames(((List<Type>)method.thrownExceptionTypes()).stream().map(Type::toString).map(String::toCharArray).toArray(char[][]::new));
@@ -551,7 +551,7 @@ class DOMToModelPopulator extends ASTVisitor {
 		SourceAnnotationMethodInfo info = new SourceAnnotationMethodInfo();
 		info.setReturnType(method.getType().toString().toCharArray());
 		setSourceRange(info, method);
-		((SourceTypeElementInfo)this.infos.peek()).addCategories(newElement, getCategories(method.getJavadoc()));
+		((SourceTypeElementInfo)this.infos.peek()).addCategories(newElement, getCategories(method));
 		boolean isDeprecated = isNodeDeprecated(method);
 		info.setFlags(toModelFlags(method.getModifiers(), isDeprecated));
 		info.setNameSourceStart(method.getName().getStartPosition());
@@ -870,7 +870,7 @@ class DOMToModelPopulator extends ASTVisitor {
 		JavaElementInfo parentInfo = this.infos.peek();
 		JavaElement parentElement = this.elements.peek();
 		boolean isDeprecated = isNodeDeprecated(field);
-		char[][] categories = getCategories(field.getJavadoc());
+		char[][] categories = getCategories(field);
 		for (VariableDeclarationFragment fragment : (Collection<VariableDeclarationFragment>) field.fragments()) {
 			SourceField newElement = new SourceField(parentElement, fragment.getName().toString());
 			this.elements.push(newElement);
@@ -986,7 +986,7 @@ class DOMToModelPopulator extends ASTVisitor {
 			.map(ProvidesDirective.class::cast)
 			.map(this::toServiceInfo)
 			.toArray(ServiceInfo[]::new);
-		char[][] categories = getCategories(node.getJavadoc());
+		char[][] categories = getCategories(node);
 		newInfo.addCategories(newElement, categories);
 
 		this.infos.push(newInfo);
@@ -1109,7 +1109,8 @@ class DOMToModelPopulator extends ASTVisitor {
 		this.alternativeDeprecated = false;
 		return this.alternativeDeprecated;
 	}
-	private char[][] getCategories(Javadoc javadoc) {
+	private char[][] getCategories(ASTNode node) {
+		Javadoc javadoc = javadoc(node);
 		if (javadoc != null) {
 			return ((List<AbstractTagElement>)javadoc.tags()).stream() //
 					.filter(tag -> "@category".equals(tag.getTagName()) && ((List<ASTNode>)tag.fragments()).size() > 0) //$NON-NLS-1$
@@ -1173,5 +1174,38 @@ class DOMToModelPopulator extends ASTVisitor {
 		if (Modifier.isVolatile(domModifiers)) res |= Flags.AccVolatile;
 		if (isDeprecated) res |= Flags.AccDeprecated;
 		return res;
+	}
+
+	private Javadoc javadoc(ASTNode node) {
+		if (node instanceof BodyDeclaration body && body.getJavadoc() != null) {
+			return body.getJavadoc();
+		}
+		if (node instanceof ModuleDeclaration module && module.getJavadoc() != null) {
+			return module.getJavadoc();
+		}
+		if (node instanceof TypeDeclaration type && type.getJavadoc() != null) {
+			return type.getJavadoc();
+		}
+		if (node instanceof EnumDeclaration enumType && enumType.getJavadoc() != null) {
+			return enumType.getJavadoc();
+		}
+		if (node instanceof FieldDeclaration field && field.getJavadoc() != null) {
+			return field.getJavadoc();
+		}
+		org.eclipse.jdt.core.dom.CompilationUnit unit = domUnit(node);
+		int commentIndex = unit.firstLeadingCommentIndex(node);
+		if (commentIndex >= 0) {
+			for (int i = commentIndex; i < unit.getCommentList().size(); i++) {
+				Comment comment = (Comment)unit.getCommentList().get(i);
+				if (comment.getStartPosition() > node.getStartPosition()) {
+					return null;
+				}
+				if (comment instanceof Javadoc javadoc &&
+					javadoc.getStartPosition() <= node.getStartPosition()) {
+					return javadoc;
+				}
+			}
+		}
+		return null;
 	}
 }
