@@ -29,6 +29,7 @@ import org.eclipse.jdt.core.Flags;
 import org.eclipse.jdt.core.IAnnotation;
 import org.eclipse.jdt.core.IImportDeclaration;
 import org.eclipse.jdt.core.IJavaElement;
+import org.eclipse.jdt.core.ILocalVariable;
 import org.eclipse.jdt.core.IMemberValuePair;
 import org.eclipse.jdt.core.JavaModelException;
 import org.eclipse.jdt.core.Signature;
@@ -176,6 +177,14 @@ class DOMToModelPopulator extends ASTVisitor {
 		}
 		if (parentInfo instanceof OpenableElementInfo openable) {
 			openable.addChild(childElement);
+			return;
+		}
+		if (parentInfo instanceof SourceMethodElementInfo method // also matches constructor
+			&& childElement instanceof LocalVariable variable
+			&& variable.isParameter()) {
+			ILocalVariable[] parameters = method.arguments != null ? Arrays.copyOf(method.arguments, method.arguments.length + 1) : new ILocalVariable[1];
+			parameters[parameters.length - 1] = variable;
+			method.arguments = parameters;
 			return;
 		}
 		if (parentInfo instanceof SourceMethodWithChildrenInfo method) {
@@ -475,12 +484,22 @@ class DOMToModelPopulator extends ASTVisitor {
 			newInfo.isRecordComponent = true;
 			this.infos.push(newInfo);
 			this.toPopulate.put(newElement, newInfo);
+		} else if (node.getParent() instanceof MethodDeclaration) {
+			LocalVariable newElement = toLocalVariable(node, this.elements.peek());
+			this.elements.push(newElement);
+			addAsChild(this.infos.peek(), newElement);
+			AnnotatableInfo newInfo = new AnnotatableInfo();
+			setSourceRange(newInfo, node);
+			newInfo.setNameSourceStart(node.getName().getStartPosition());
+			newInfo.setNameSourceEnd(node.getName().getStartPosition() + node.getName().getLength() - 1);
+			this.infos.push(newInfo);
+			this.toPopulate.put(newElement, newInfo);
 		}
 		return true;
 	}
 	@Override
 	public void endVisit(SingleVariableDeclaration decl) {
-		if (decl.getParent() instanceof RecordDeclaration recordDecl) {
+		if (decl.getParent() instanceof RecordDeclaration || decl.getParent() instanceof MethodDeclaration) {
 			this.elements.pop();
 			this.infos.pop();
 		}
@@ -513,7 +532,6 @@ class DOMToModelPopulator extends ASTVisitor {
 			new SourceConstructorWithChildrenInfo(new IJavaElement[0]) :
 			new SourceMethodWithChildrenInfo(new IJavaElement[0]);
 		info.setArgumentNames(parameters.stream().map(param -> param.getName().toString().toCharArray()).toArray(char[][]::new));
-		info.arguments = parameters.stream().map(param -> toLocalVariable(param, newElement)).toArray(LocalVariable[]::new);
 		if (method.getAST().apiLevel() > 2) {
 			if (method.getReturnType2() != null) {
 				info.setReturnType(method.getReturnType2().toString().toCharArray());
@@ -606,9 +624,16 @@ class DOMToModelPopulator extends ASTVisitor {
 
 	@Override
 	public boolean visit(NormalAnnotation node) {
-		Annotation newElement = new Annotation(this.elements.peek(), node.getTypeName().toString());
+		JavaElement parent = this.elements.peek();
+		Annotation newElement = new Annotation(parent, node.getTypeName().toString());
 		this.elements.push(newElement);
 		addAsChild(this.infos.peek(), newElement);
+		if (parent instanceof LocalVariable variable) {
+			// also need to explicitly add annotations in the parent node,
+			// populating the elementInfo is not sufficient?
+			variable.annotations = Arrays.copyOf(variable.annotations, variable.annotations.length + 1);
+			variable.annotations[variable.annotations.length - 1] = newElement;
+		}
 		AnnotationInfo newInfo = new AnnotationInfo();
 		setSourceRange(newInfo, node);
 		newInfo.nameStart = node.getTypeName().getStartPosition();
@@ -632,9 +657,16 @@ class DOMToModelPopulator extends ASTVisitor {
 
 	@Override
 	public boolean visit(MarkerAnnotation node) {
-		Annotation newElement = new Annotation(this.elements.peek(), node.getTypeName().toString());
+		JavaElement parent = this.elements.peek();
+		Annotation newElement = new Annotation(parent, node.getTypeName().toString());
 		this.elements.push(newElement);
 		addAsChild(this.infos.peek(), newElement);
+		if (parent instanceof LocalVariable variable) {
+			// also need to explicitly add annotations in the parent node,
+			// populating the elementInfo is not sufficient?
+			variable.annotations = Arrays.copyOf(variable.annotations, variable.annotations.length + 1);
+			variable.annotations[variable.annotations.length - 1] = newElement;
+		}
 		AnnotationInfo newInfo = new AnnotationInfo();
 		setSourceRange(newInfo, node);
 		newInfo.nameStart = node.getTypeName().getStartPosition();
@@ -652,9 +684,16 @@ class DOMToModelPopulator extends ASTVisitor {
 
 	@Override
 	public boolean visit(SingleMemberAnnotation node) {
-		Annotation newElement = new Annotation(this.elements.peek(), node.getTypeName().toString());
+		JavaElement parent = this.elements.peek();
+		Annotation newElement = new Annotation(parent, node.getTypeName().toString());
 		this.elements.push(newElement);
 		addAsChild(this.infos.peek(), newElement);
+		if (parent instanceof LocalVariable variable) {
+			// also need to explicitly add annotations in the parent node,
+			// populating the elementInfo is not sufficient?
+			variable.annotations = Arrays.copyOf(variable.annotations, variable.annotations.length + 1);
+			variable.annotations[variable.annotations.length - 1] = newElement;
+		}
 		AnnotationInfo newInfo = new AnnotationInfo();
 		setSourceRange(newInfo, node);
 		newInfo.nameStart = node.getTypeName().getStartPosition();
@@ -873,7 +912,7 @@ class DOMToModelPopulator extends ASTVisitor {
 				parameter.getName().getStartPosition() + parameter.getName().getLength() - 1,
 				Util.getSignature(parameter.getType()),
 				null, // should be populated while navigating children
-				parameter.getFlags(),
+				toModelFlags(parameter.getFlags(), false),
 				parameter.getParent() instanceof MethodDeclaration);
 	}
 
