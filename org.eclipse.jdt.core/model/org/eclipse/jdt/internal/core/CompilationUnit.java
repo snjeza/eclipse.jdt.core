@@ -63,6 +63,7 @@ import org.eclipse.jdt.internal.compiler.env.IElementInfo;
 import org.eclipse.jdt.internal.compiler.impl.CompilerOptions;
 import org.eclipse.jdt.internal.compiler.lookup.TypeConstants;
 import org.eclipse.jdt.internal.compiler.problem.AbortCompilationUnit;
+import org.eclipse.jdt.internal.compiler.problem.DefaultProblem;
 import org.eclipse.jdt.internal.compiler.problem.DefaultProblemFactory;
 import org.eclipse.jdt.internal.compiler.problem.ProblemSeverities;
 import org.eclipse.jdt.internal.compiler.util.SuffixConstants;
@@ -219,7 +220,13 @@ protected boolean buildStructure(OpenableElementInfo info, final IProgressMonito
 				if (perWorkingCopyInfo != null && problems == null) {
 					try {
 						perWorkingCopyInfo.beginReporting();
+						// https://github.com/eclipse-jdtls/eclipse-jdt-core-incubator/issues/85
 						for (IProblem problem : newAST.getProblems()) {
+							if (this.ignoreOptionalProblems() && problem.getID() != IProblem.Task
+									&& problem instanceof DefaultProblem defaultProblem
+									&& (defaultProblem.severity & ProblemSeverities.Optional) != 0) {
+								continue;
+							}
 							perWorkingCopyInfo.acceptProblem(problem);
 						}
 					} finally {

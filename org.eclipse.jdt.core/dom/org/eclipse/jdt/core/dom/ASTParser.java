@@ -378,7 +378,10 @@ public class ASTParser {
 			// copy client's options so as to not do any side effect on them
 			options = new HashMap<>(options);
 		}
-		options.remove(JavaCore.COMPILER_TASK_TAGS); // no need to parse task tags
+		// https://github.com/eclipse-jdtls/eclipse-jdt-core-incubator/issues/85
+		if (!org.eclipse.jdt.internal.core.CompilationUnit.DOM_BASED_OPERATIONS) {
+			options.remove(JavaCore.COMPILER_TASK_TAGS); // no need to parse task tags
+		}
 		this.compilerOptions = options;
 	}
 

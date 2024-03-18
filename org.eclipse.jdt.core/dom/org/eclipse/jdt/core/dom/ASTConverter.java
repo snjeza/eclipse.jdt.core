@@ -17,6 +17,7 @@
 package org.eclipse.jdt.core.dom;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Comparator;
 import java.util.HashSet;
 import java.util.Iterator;
@@ -1547,6 +1548,17 @@ class ASTConverter {
 					new ASTRecoveryPropagator(resizedProblems, unit.compilationResult.recoveryScannerData);
 				compilationUnit.accept(recoveryPropagator);
 				compilationUnit.setProblems(resizedProblems);
+			}
+			if (org.eclipse.jdt.internal.core.CompilationUnit.DOM_BASED_OPERATIONS) {
+				// https://github.com/eclipse-jdtls/eclipse-jdt-core-incubator/issues/85
+				int taskLength = unit.compilationResult.taskCount;
+				if (taskLength > 0) {
+					final CategorizedProblem[] problems = (CategorizedProblem[]) compilationUnit.getProblems();
+					final CategorizedProblem[] tasks = unit.compilationResult.tasks;
+					final CategorizedProblem[] allProblems = Arrays.copyOf(problems, problems.length + taskLength);
+					System.arraycopy(tasks, 0, allProblems, problems.length, taskLength);
+					compilationUnit.setProblems(allProblems);
+				}
 			}
 			if (this.resolveBindings) {
 				lookupForScopes();
