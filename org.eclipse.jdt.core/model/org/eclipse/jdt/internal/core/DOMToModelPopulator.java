@@ -690,10 +690,13 @@ class DOMToModelPopulator extends ASTVisitor {
 				break;
 			}
 		}
-		newInfo.setSourceRangeEnd(decl.getStartPosition() + decl.getLength() - 1);
 		newInfo.setHandle(newElement);
 		setSourceRange(newInfo, decl);
-		if (decl.getParent() instanceof ClassInstanceCreation constructorInvocation) {
+		if (decl.getParent() instanceof EnumConstantDeclaration enumConstantDeclaration) {
+			setSourceRange(newInfo, enumConstantDeclaration);
+			newInfo.setNameSourceStart(enumConstantDeclaration.getName().getStartPosition());
+			newInfo.setNameSourceEnd(enumConstantDeclaration.getName().getStartPosition() + enumConstantDeclaration.getName().getLength() - 1);
+		} else if (decl.getParent() instanceof ClassInstanceCreation constructorInvocation) {
 			if (constructorInvocation.getAST().apiLevel() > 2) {
 				((List<SimpleType>)constructorInvocation.typeArguments())
 					.stream()
