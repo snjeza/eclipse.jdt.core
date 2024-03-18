@@ -13,6 +13,7 @@ package org.eclipse.jdt.internal.core;
 import java.util.AbstractMap.SimpleEntry;
 import java.util.Arrays;
 import java.util.Collection;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -110,6 +111,7 @@ class DOMToModelPopulator extends ASTVisitor {
 	private final Stack<JavaElement> elements = new Stack<>();
 	private final Stack<JavaElementInfo> infos = new Stack<>();
 	private final Set<String> currentTypeParameters = new HashSet<>();
+	private final Map<SourceType, Integer> nestedTypesCount = new HashMap<>();
 	private final CompilationUnitElementInfo unitInfo;
 	private ImportContainer importContainer;
 	private ImportContainerInfo importContainerInfo;
@@ -124,13 +126,20 @@ class DOMToModelPopulator extends ASTVisitor {
 		this.unitInfo = unitInfo;
 	}
 
-	private static void addAsChild(JavaElementInfo parentInfo, IJavaElement childElement) {
+	private void addAsChild(JavaElementInfo parentInfo, IJavaElement childElement) {
 		if (childElement instanceof SourceRefElement element) {
 			while (Stream.of(parentInfo.getChildren())
-				.filter(other -> other.getElementType() == element.getElementType())
-				.filter(other -> Objects.equals(other.getHandleIdentifier(), element.getHandleIdentifier()))
-				.findAny().isPresent()) {
-					element.incOccurrenceCount();
+					.filter(other -> other.getElementType() == element.getElementType())
+					.filter(other -> Objects.equals(other.getHandleIdentifier(), element.getHandleIdentifier()))
+					.findAny().isPresent()) {
+				element.incOccurrenceCount();
+			}
+			if (childElement instanceof SourceType anonymousType && anonymousType.isAnonymous()) {
+				// occurrence count for anonymous types are counted from the including type
+				IJavaElement parent = element.getParent().getAncestor(IJavaElement.TYPE);
+				if (parent instanceof SourceType nestType) {
+					anonymousType.localOccurrenceCount = this.nestedTypesCount.compute(nestType, (nest, currentCount) -> currentCount == null ? 1 : currentCount + 1); // occurrences count are 1-based
+				}
 			}
 		}
 		if (parentInfo instanceof AnnotatableInfo annotable && childElement instanceof IAnnotation annotation) {
