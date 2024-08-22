@@ -244,8 +244,6 @@ protected boolean buildStructure(OpenableElementInfo info, final IProgressMonito
 				(reconcileFlags & ICompilationUnit.IGNORE_METHOD_BODIES) == 0) {
 				// most complete possible AST
 				this.ast = newAST;
-			} else {
-				this.ast = null;
 			}
 		}
 	} else {
